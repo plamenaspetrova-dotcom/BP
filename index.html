@@ -84,6 +84,22 @@
   .banner.high{background:var(--high-bg);color:#8e1b1b}
   .banner.urgent{background:var(--urgent-bg);color:#fff}
   .banner ul{margin:6px 0 0;padding-left:20px}
+  .rlist{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px}
+  .rd{display:flex;align-items:center;gap:10px;border:2px solid var(--line);border-radius:14px;padding:10px 12px;background:#fff;text-align:left;width:100%}
+  .rd.sel{border-color:var(--brand);background:var(--brand-soft)}
+  .rd .tm{font-weight:800;min-width:58px}
+  .rd .bpv{font-weight:900;font-size:20px;border-radius:10px;padding:2px 8px;background:#f0f2f5}
+  .rd .pl{color:var(--muted);flex:1;font-size:16px}
+  .rd .ed{color:var(--brand);font-size:14px;font-weight:700}
+  .addr{width:100%;border:2px dashed var(--brand);background:#fff;color:var(--brand);border-radius:14px;padding:14px;font-weight:800;font-size:18px}
+  .dayavg{background:#f4f6f9;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:16px}
+  .editor{border-top:2px solid var(--line);margin-top:14px;padding-top:12px}
+  .tval{min-width:96px;text-align:center;font-size:30px;font-weight:900;border-radius:14px;padding:4px 8px;background:var(--brand-soft);color:var(--brand)}
+  .tchips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  .tchip{border:2px solid transparent;border-radius:12px;padding:8px 2px;background:#f0f2f5;font-weight:700;font-size:15px;line-height:1.2}
+  .tchip small{display:block;font-weight:600;color:var(--muted);font-size:13px}
+  .tchip.on{border-color:var(--ink)}
+  .delr{border:0;background:none;color:var(--high);text-decoration:underline;font-size:15px;padding:10px 0 0}
   .clear{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:15px;padding:8px 0 0}
 
   /* toggles */
@@ -187,8 +203,26 @@ const DEFAULTS = {sys:120, dia:80, pulse:70};
 /* ============ STORAGE ============ */
 const KEY = 'momBpTracker.v1';
 function load(){
-  try{ const raw = localStorage.getItem(KEY); if(raw){ const d = JSON.parse(raw); if(d && d.entries) return d; } }catch(e){}
+  try{ const raw = localStorage.getItem(KEY); if(raw){ const d = JSON.parse(raw); if(d && d.entries) return migrate(d); } }catch(e){}
   return {entries:{}};
+}
+// Each day: readings = [{m: minutes since midnight, sys, dia, pulse}], plus once-a-day lists.
+// e.sys / e.dia / e.pulse are the day's AVERAGE, recalculated from the readings.
+function migrate(d){
+  for(const k in d.entries){
+    const e = d.entries[k];
+    e.symptoms = e.symptoms||[]; e.habits = e.habits||[]; e.precautions = e.precautions||[];
+    if(!Array.isArray(e.readings)) e.readings = (e.sys!=null||e.dia!=null||e.pulse!=null) ? [{m:null, sys:e.sys??null, dia:e.dia??null, pulse:e.pulse??null}] : [];
+    recompute(e);
+  }
+  return d;
+}
+function recompute(e){
+  const full = e.readings.filter(r=>r.sys!=null && r.dia!=null);
+  const pu = e.readings.filter(r=>r.pulse!=null);
+  e.sys = full.length ? Math.round(mean(full.map(r=>r.sys))) : null;
+  e.dia = full.length ? Math.round(mean(full.map(r=>r.dia))) : null;
+  e.pulse = pu.length ? Math.round(mean(pu.map(r=>r.pulse))) : null;
 }
 let db = load();
 let storageOk = true;
@@ -228,17 +262,48 @@ function hasBP(e){ return !!e && e.sys!=null && e.dia!=null; }
 /* ============ ENTRIES ============ */
 function entry(s){ return db.entries[s] || null; }
 function ensure(s){
-  if(!db.entries[s]) db.entries[s] = {sys:null, dia:null, pulse:null, symptoms:[], habits:[], precautions:[]};
+  if(!db.entries[s]) db.entries[s] = {sys:null, dia:null, pulse:null, readings:[], symptoms:[], habits:[], precautions:[]};
   return db.entries[s];
 }
 function tidy(s){
   const e = db.entries[s];
-  if(e && e.sys==null && e.dia==null && e.pulse==null && !e.symptoms.length && !e.habits.length && !e.precautions.length) delete db.entries[s];
+  if(e && !e.readings.length && !e.symptoms.length && !e.habits.length && !e.precautions.length) delete db.entries[s];
 }
 function lastValue(f){
   const keys = Object.keys(db.entries).sort().reverse();
-  for(const k of keys){ if(db.entries[k][f]!=null) return db.entries[k][f]; }
+  for(const k of keys){ const R = db.entries[k].readings; for(let i=R.length-1;i>=0;i--) if(R[i][f]!=null) return R[i][f]; }
   return DEFAULTS[f];
+}
+function hhmm(m){ return m==null ? '--:--' : String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function nowMin(){ const d = new Date(); return Math.floor((d.getHours()*60+d.getMinutes())/5)*5; }
+function curReading(){
+  const e = entry(state.sel); if(!e || !e.readings.length) return null;
+  const R = e.readings; return R[state.rIdx==null || state.rIdx>=R.length ? R.length-1 : state.rIdx];
+}
+function addReading(s){
+  const e = ensure(s), R = e.readings;
+  const last = R.length ? R[R.length-1].m : null;
+  const m = s===today() ? nowMin() : last!=null ? Math.min(last+240, 1435) : 480;
+  const r = {m, sys:null, dia:null, pulse:null};
+  R.push(r); sortReadings(e, r); return r;
+}
+function sortReadings(e, keep){
+  e.readings.sort((a,b)=>(a.m??-1)-(b.m??-1));
+  state.rIdx = e.readings.indexOf(keep);
+}
+// Morning (before 12:00) vs evening (after 17:00) readings
+function amPm(list){
+  const R = []; list.forEach(e=>e.readings && e.readings.forEach(r=>{ if(r.sys!=null && r.m!=null) R.push(r); }));
+  const am = R.filter(r=>r.m<720), pm = R.filter(r=>r.m>=1020);
+  if(am.length<3 || pm.length<3) return null;
+  return {am:r0(mean(am.map(r=>r.sys))), pm:r0(mean(pm.map(r=>r.sys)))};
+}
+function amPmLine(add, list){
+  const x = amPm(list); if(!x) return;
+  const d = x.am - x.pm;
+  if(d>=5) add('watch','🌅', `Сутрин кръвното е по-високо: средно <b>${x.am}</b> сутрин срещу <b>${x.pm}</b> вечер. Кажи на лекаря — може да е важно кога пиеш хапчето.`);
+  else if(d<=-5) add('watch','🌙', `Вечер кръвното е по-високо: средно <b>${x.pm}</b> вечер срещу <b>${x.am}</b> сутрин.`);
+  else add('info','🕗', `Сутрин (${x.am}) и вечер (${x.pm}) кръвното е почти еднакво.`);
 }
 function sortedEntries(from, to){
   return Object.keys(db.entries).filter(k=>k>=from && k<=to).sort().map(k=>db.entries[k]);
@@ -299,7 +364,7 @@ function weekInsights(st, prev){
     return L;
   }
   const z = st.zone;
-  add(z,'🩺', `Средно кръвно <b>${st.sys}/${st.dia}</b>${st.pulse?`, пулс <b>${st.pulse}</b>`:''} — <b>${ZWORD[z].toLowerCase()}</b>.`);
+  add(z,'🩺', `Средно кръвно (от дневните средни) <b>${st.sys}/${st.dia}</b>${st.pulse?`, пулс <b>${st.pulse}</b>`:''} — <b>${ZWORD[z].toLowerCase()}</b>.`);
   const of = st.elapsed && st.elapsed<7 ? st.elapsed : 7;
   add(st.n>=of-1?'ok':'info','📅', `Измерено в <b>${st.n} от ${of}</b> дни${st.n<of-1?' — опитай да мериш всеки ден по едно и също време.':'. Чудесна редовност!'}`);
   if(st.n>1) add('info','↕️', `Най-високо <b>${st.max.e.sys}/${st.max.e.dia}</b> ${DAYS_ON[dow(st.max.iso)]}; най-ниско <b>${st.min.e.sys}/${st.min.e.dia}</b> ${DAYS_ON[dow(st.min.iso)]}.`);
@@ -326,6 +391,7 @@ function weekInsights(st, prev){
   // Personal patterns from the last 10 weeks
   const pt = patterns(sortedEntries(addDays(st.mon,-63), addDays(st.mon,6)));
   if(pt.helps[0]){ const h = pt.helps[0]; add('ok','💡', `Твоята закономерност: в дните с „<b>${h.it.label.toLowerCase()}</b>“ горната граница е с около <b>${-h.ef.diff} по-ниска</b> (${h.ef.yes} срещу ${h.ef.no}).`); }
+  amPmLine(add, sortedEntries(addDays(st.mon,-63), addDays(st.mon,6)));
   if(pt.links[0]){ const l = pt.links[0]; add('watch','🔎', `<b>${l.it.label}</b> се появява в дни с по-високо кръвно (${l.ef.yes} срещу ${l.ef.no}).`); }
   if(RANK[z]>=2 || st.high>=2) add('high','👉', `<b>Какво да направиш:</b> ${STEPS_HIGH}`);
   else if(z==='watch') add('watch','👉', '<b>Наблюдавай:</b> по-малко сол, повече вода, всеки ден разходка или гимнастика, добър сън. Целта е 120 или по-ниско.');
@@ -360,6 +426,7 @@ function tenInsights(weeks){
   const pt = patterns(all);
   if(pt.helps.length) add('ok','💡', 'Какво изглежда, че ти помага: '+pt.helps.slice(0,3).map(h=>`<b>${h.it.label.toLowerCase()}</b> (−${-h.ef.diff})`).join(', ')+'.');
   else if(all.length>=10) add('info','💡','Още няма ясна връзка с навиците — продължавай да ги отбелязваш всеки ден.');
+  amPmLine(add, sortedEntries(weeks[0].mon, addDays(weeks[weeks.length-1].mon,6)));
   if(pt.links.length) add('watch','🔎', 'Симптоми, които идват с по-високо кръвно: '+pt.links.slice(0,3).map(l=>`<b>${l.it.label.toLowerCase()}</b> (+${l.ef.diff})`).join(', ')+'.');
   if(RANK[z]>=2 || hiW>=2) add('high','👉', '<b>Препоръка:</b> разпечатай тази страница и я покажи на лекаря. '+STEPS_HIGH);
   return L;
@@ -370,7 +437,7 @@ function insightList(L){
 }
 
 /* ============ UI STATE ============ */
-const state = {tab:'day', sel:today(), weekMon:mondayOf(today()), tenMon:mondayOf(today())};
+const state = {tab:'day', sel:today(), rIdx:null, weekMon:mondayOf(today()), tenMon:mondayOf(today())};
 const app = document.getElementById('app');
 
 function render(){
@@ -380,7 +447,7 @@ function render(){
 
 /* ---------- DAY ---------- */
 function bpBlock(f, label, sub){
-  const e = entry(state.sel) || {}; const v = e[f] ?? null; const z = zoneFor(f,v);
+  const r = curReading() || {}; const v = r[f] ?? null; const z = zoneFor(f,v);
   return `<div class="bp-field">
     <div class="bp-head">
       <div><div class="bp-label">${label}</div><div class="bp-sub">${sub}</div></div>
@@ -394,18 +461,63 @@ function bpBlock(f, label, sub){
   </div>`;
 }
 
-function dayBanner(e){
-  if(!hasBP(e)) return '';
-  const z = dayZone(e);
-  const head = `<b>${e.sys}/${e.dia}</b>${e.pulse!=null?` · пулс ${e.pulse}`:''} — <b>${ZWORD[z]}</b>`;
+function dayBanner(r){
+  if(!r || r.sys==null || r.dia==null) return '';
+  const z = dayZone(r);
+  const head = `<b>${hhmm(r.m)} → ${r.sys}/${r.dia}</b>${r.pulse!=null?` · пулс ${r.pulse}`:''} — <b>${ZWORD[z]}</b>`;
   let body = '';
   if(z==='ok') body = '<div>Чудесно — продължавай така. 👍</div>';
   if(z==='watch') body = '<div>Между 121 и 130. Наблюдавай: по-малко сол, пий вода, кратка разходка, добра почивка.</div>';
-  if(z==='high') body = `<ul><li>Седни спокойно 5 минути и измери отново</li><li>Вземи хапчето за кръвно, ако още не си</li><li>Без солена храна и допълнително кафе днес</li><li>Вода, чай с джинджифил/лимон, спокойна разходка</li><li>Над 130 няколко дни подред → обади се на лекаря</li></ul>`;
+  if(z==='high') body = `<ul><li>Седни спокойно 5 минути и измери отново (натисни „Ново измерване“)</li><li>Вземи хапчето за кръвно, ако още не си</li><li>Без солена храна и допълнително кафе днес</li><li>Вода, чай с джинджифил/лимон, спокойна разходка</li><li>Над 130 няколко дни подред → обади се на лекаря</li></ul>`;
   if(z==='urgent') body = `<div>Почини 5 минути и измери отново. <b>Ако пак е толкова високо или имаш болка в гърдите, силно главоболие, проблем със зрението или говора — обади се веднага на 112.</b></div>`;
   let pulse = '';
-  if(e.pulse!=null && pulseZone(e.pulse)!=='ok') pulse = `<div style="margin-top:6px">Пулс ${e.pulse} е ${e.pulse>100?'висок':'нисък'} — почини и измери отново; кажи на лекаря, ако се повтаря.</div>`;
+  if(r.pulse!=null && pulseZone(r.pulse)!=='ok') pulse = `<div style="margin-top:6px">Пулс ${r.pulse} е ${r.pulse>100?'висок':'нисък'} — почини и измери отново; кажи на лекаря, ако се повтаря.</div>`;
   return `<div class="banner ${z}">${head}${body}${pulse}</div>`;
+}
+
+const TIMES = [[420,'Сутрин'],[600,'Преди обед'],[780,'Обед'],[960,'Следобед'],[1140,'Вечер'],[1320,'Преди сън']];
+function bpCard(){
+  const s = state.sel, e = entry(s), R = e ? e.readings : [], cur = curReading();
+  const list = R.map((r,i)=>{
+    const z = r.sys!=null && r.dia!=null ? dayZone(r) : '';
+    return `<button class="rd ${r===cur?'sel':''}" data-act="rsel" data-i="${i}">
+      <span class="tm">🕗 ${hhmm(r.m)}</span>
+      <span class="bpv ${z?'v-'+z:''}">${r.sys??'–'}/${r.dia??'–'}</span>
+      <span class="pl">${r.pulse!=null?'♥ '+r.pulse:''}</span>
+      <span class="ed">${r===cur?'✏️':''}</span></button>`;
+  }).join('');
+  const avg = R.length>1 && hasBP(e) ? `<div class="dayavg">Средно за деня: <b>${e.sys}/${e.dia}</b>${e.pulse!=null?' · пулс '+e.pulse:''} (${R.length} измервания)</div>` : '';
+  let editor = '';
+  if(cur){
+    const n = R.indexOf(cur)+1;
+    const tchips = (s===today()?[[nowMin(),'Сега']]:[]).concat(TIMES).map(([m,l])=>
+      `<button class="tchip ${cur.m===m?'on':''}" data-act="tset" data-m="${m}">${l}<small>${hhmm(m)}</small></button>`).join('');
+    editor = `<div class="editor">
+      <div class="bp-head">
+        <div><div class="bp-label">Час</div><div class="bp-sub">Измерване ${n} от ${R.length}</div></div>
+        <div class="bp-adjust">
+          <button class="pm" data-act="tadj" data-d="-5" aria-label="минус 5 минути">−</button>
+          <div class="tval">${hhmm(cur.m)}</div>
+          <button class="pm" data-act="tadj" data-d="5" aria-label="плюс 5 минути">+</button>
+        </div>
+      </div>
+      <div class="tchips">${tchips}</div>
+      ${bpBlock('sys','Горна граница','Систолно (горно)')}
+      ${bpBlock('dia','Долна граница','Диастолно (долно)')}
+      ${bpBlock('pulse','Пулс','Удара в минута')}
+      <div class="legend"><span class="l-ok">До 120 нормално</span><span class="l-watch">121–130 внимание</span><span class="l-high">Над 130 действай</span></div>
+      ${dayBanner(cur)}
+      <button class="delr" data-act="rdel">🗑️ Изтрий това измерване</button>
+    </div>`;
+  }
+  return `<section class="card">
+    <h2>🩺 Кръвно налягане</h2>
+    <p class="hint">${R.length ? 'Натисни измерване, за да го промениш, или добави ново.' : 'Натисни „Ново измерване“ — часът се попълва сам.'}</p>
+    ${avg}
+    ${R.length?`<div class="rlist">${list}</div>`:''}
+    <button class="addr" data-act="radd">➕ Ново измерване</button>
+    ${editor}
+  </section>`;
 }
 
 function toggles(g){
@@ -446,16 +558,7 @@ function renderDay(){
     ${s!==t?'<button class="todaybtn" data-act="gotoday">Към днес</button>':''}
   </section>
 
-  <section class="card">
-    <h2>🩺 Кръвно налягане</h2>
-    <p class="hint">Натисни най-близкото число, после коригирай с − / +.</p>
-    ${bpBlock('sys','Горна граница','Систолно (горно)')}
-    ${bpBlock('dia','Долна граница','Диастолно (долно)')}
-    ${bpBlock('pulse','Пулс','Удара в минута')}
-    <div class="legend"><span class="l-ok">До 120 нормално</span><span class="l-watch">121–130 внимание</span><span class="l-high">Над 130 действай</span></div>
-    ${dayBanner(e)}
-    ${e && (e.sys!=null||e.dia!=null||e.pulse!=null) ? '<button class="clear" data-act="clearbp">Изчисти числата за този ден</button>' : ''}
-  </section>
+  ${bpCard()}
 
   <section class="card"><h2>🤒 Как се чувствам?</h2><p class="hint">Натисни симптомите, които имаш днес.</p>${toggles('symptoms')}</section>
   <section class="card"><h2>🌿 Здравословни навици</h2><p class="hint">Натисни какво направи днес.</p>${toggles('habits')}</section>
@@ -485,7 +588,7 @@ function renderWeek(){
     return `<button class="drow" data-act="open" data-d="${d.iso}" ${d.iso>t?'disabled':''}>
       <span class="dl">${DS[i]}<br><small class="note">${nice(d.iso)}</small></span>
       <span class="bp ${z?'v-'+z:''}">${hasBP(e)?e.sys+'/'+e.dia:'–'}</span>
-      <span class="note">${e&&e.pulse!=null?'♥ '+e.pulse:''}</span>
+      <span class="note">${e&&e.pulse!=null?'♥ '+e.pulse:''}${e&&e.readings.length>1?'<br>×'+e.readings.length+' изм.':''}</span>
       <span class="ex">${sy}</span></button>`;
   }).join('');
   return `
@@ -503,7 +606,7 @@ function renderWeek(){
     </div>
   </section>
   <section class="card"><h2>📝 Седмичен преглед</h2>${insightList(weekInsights(st, prev))}</section>
-  <section class="card"><h2>📅 Ден по ден</h2><p class="hint">Натисни ден, за да го отвориш.</p>${rows}</section>
+  <section class="card"><h2>📅 Ден по ден</h2><p class="hint">Средно за деня. Натисни ден, за да го отвориш.</p>${rows}</section>
   <section class="card">
     <h2>✔️ Навици и превенция</h2><p class="hint">Пн → Нд. Пунктирано кръгче = няма запис за деня.</p>
     <h3>🌿 Навици</h3>${HABITS.map(it=>dotsRow(st,'habits',it)).join('')}
@@ -610,10 +713,8 @@ document.getElementById('importFile').addEventListener('change', ev=>{
     try{
       const d = JSON.parse(rd.result);
       if(!d || typeof d.entries!=='object') throw 0;
-      for(const k in d.entries){
-        const e = d.entries[k];
-        db.entries[k] = {sys:e.sys??null, dia:e.dia??null, pulse:e.pulse??null, symptoms:e.symptoms||[], habits:e.habits||[], precautions:e.precautions||[]};
-      }
+      migrate(d);
+      for(const k in d.entries) db.entries[k] = d.entries[k];
       save(true); toast('Възстановено ✓'); render();
     }catch(e){ toast('⚠️ Невалиден файл'); }
     ev.target.value = '';
@@ -626,22 +727,37 @@ document.addEventListener('click', ev=>{
   const b = ev.target.closest('[data-act]'); if(!b || b.disabled) return;
   const a = b.dataset.act, s = state.sel;
   if(a==='tab'){ state.tab = b.dataset.tab; if(state.tab==='week') state.weekMon = mondayOf(state.sel); render(); window.scrollTo(0,0); return; }
-  if(a==='pick'){ state.sel = b.dataset.d; render(); return; }
-  if(a==='open'){ state.sel = b.dataset.d; state.tab = 'day'; render(); window.scrollTo(0,0); return; }
-  if(a==='gotoday'){ state.sel = today(); render(); return; }
+  if(a==='pick'){ state.sel = b.dataset.d; state.rIdx = null; render(); return; }
+  if(a==='open'){ state.sel = b.dataset.d; state.rIdx = null; state.tab = 'day'; render(); window.scrollTo(0,0); return; }
+  if(a==='gotoday'){ state.sel = today(); state.rIdx = null; render(); return; }
   if(a==='dweek'){
     let n = addDays(s, +b.dataset.d); if(n>today()) n = today();
-    state.sel = n; render(); return;
+    state.sel = n; state.rIdx = null; render(); return;
   }
   if(a==='wweek'){ state.weekMon = addDays(state.weekMon, +b.dataset.d); render(); return; }
   if(a==='tweek'){ state.tenMon = addDays(state.tenMon, +b.dataset.d); render(); return; }
-  if(a==='set'){ const e = ensure(s); e[b.dataset.f] = +b.dataset.v; save(); render(); return; }
-  if(a==='adj'){
-    const e = ensure(s), f = b.dataset.f;
-    e[f] = e[f]==null ? lastValue(f) : Math.max(30, Math.min(250, e[f] + (+b.dataset.d)));
-    save(); render(); return;
+  if(a==='set'){
+    const r = curReading() || addReading(s); r[b.dataset.f] = +b.dataset.v;
+    recompute(ensure(s)); save(); render(); return;
   }
-  if(a==='clearbp'){ const e = ensure(s); e.sys = e.dia = e.pulse = null; tidy(s); save(); render(); return; }
+  if(a==='adj'){
+    const r = curReading() || addReading(s), f = b.dataset.f;
+    r[f] = r[f]==null ? lastValue(f) : Math.max(30, Math.min(250, r[f] + (+b.dataset.d)));
+    recompute(ensure(s)); save(); render(); return;
+  }
+  if(a==='radd'){ addReading(s); save(); render(); return; }
+  if(a==='rsel'){ state.rIdx = +b.dataset.i; render(); return; }
+  if(a==='rdel'){
+    const e = entry(s), r = curReading(); if(!e || !r) return;
+    e.readings.splice(e.readings.indexOf(r),1); state.rIdx = null;
+    recompute(e); tidy(s); save(); render(); return;
+  }
+  if(a==='tset' || a==='tadj'){
+    const r = curReading(); if(!r) return;
+    if(a==='tset') r.m = +b.dataset.m;
+    else r.m = ((r.m==null ? nowMin() : r.m) + (+b.dataset.d) + 1440) % 1440;
+    sortReadings(entry(s), r); save(); render(); return;
+  }
   if(a==='tog'){
     const e = ensure(s), g = b.dataset.g, id = b.dataset.id;
     const i = e[g].indexOf(id); if(i>=0) e[g].splice(i,1); else e[g].push(id);
