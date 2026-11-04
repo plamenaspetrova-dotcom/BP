@@ -101,6 +101,7 @@
   .tchip.on{border-color:var(--ink)}
   .delr{border:0;background:none;color:var(--high);text-decoration:underline;font-size:15px;padding:10px 0 0}
   .dlt{font-size:15px;font-weight:800;padding:2px 7px;border-radius:8px;white-space:nowrap}
+  .dlt.gap{color:#7a4600;background:var(--watch-bg)}
   .dlt.down{color:var(--ok);background:var(--ok-bg)} .dlt.up{color:var(--high);background:var(--high-bg)} .dlt.same{color:var(--muted);background:#f0f2f5}
   .wrow{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;align-items:flex-start}
   .wrow .dl{width:56px;font-weight:700;flex:none}
@@ -129,7 +130,10 @@
   .mcol.sel{outline:2px solid var(--brand)}
   .mcol.ok{background:var(--ok-bg);color:var(--ok)} .mcol.watch{background:var(--watch-bg);color:var(--watch)} .mcol.high,.mcol.urgent{background:var(--high-bg);color:var(--high)}
   .ins{list-style:none;margin:0;padding:0}
-  .ins li{display:flex;gap:10px;padding:10px 12px;border-radius:12px;margin-bottom:6px;background:#f4f6f9;font-size:17px}
+  .ins li{display:flex;gap:8px;padding:8px 10px;border-radius:12px;margin-bottom:6px;background:#f4f6f9;font-size:16px;line-height:1.35}
+  details.more summary{list-style:none;cursor:pointer;color:var(--brand);font-weight:700;padding:8px 2px;font-size:16px}
+  details.more summary::-webkit-details-marker{display:none}
+  details.more summary::before{content:"▸ "} details.more[open] summary::before{content:"▾ "}
   .ins li .i{font-size:20px;flex:none}
   .ins li span:last-child{min-width:0;overflow-wrap:anywhere}
   .ins li.ok{background:var(--ok-bg)} .ins li.watch{background:var(--watch-bg)} .ins li.high,.ins li.urgent{background:var(--high-bg)}
@@ -257,12 +261,28 @@ function nice(s){ const d = fromIso(s); return d.getDate()+' '+MONTHS[d.getMonth
 function today(){ return iso(new Date()); }
 
 /* ============ BP ZONES ============
-   Top (systolic): up to 120 normal · 121–130 slightly raised · above 130 high (take steps) · 180+ very high
-   Bottom (diastolic): up to 80 normal · 81–89 slightly raised · 90+ high · 120+ very high */
+   Top (systolic): up to 134 normal · above 134 raised (take steps) · 180+ very high
+   Bottom (diastolic): up to 87 normal · above 87 raised · 120+ very high
+   Gap (top minus bottom): under 30 = numbers too close together → flag it */
+const SYS_MAX = 134, DIA_MAX = 87, GAP_MIN = 30;
 const RANK = {ok:0, watch:1, high:2, urgent:3};
-const ZWORD = {ok:'Нормално', watch:'Леко повишено', high:'Високо – действай', urgent:'Много високо'};
-function sysZone(v){ if(v==null) return null; if(v>=180) return 'urgent'; if(v>130) return 'high'; if(v>120) return 'watch'; return 'ok'; }
-function diaZone(v){ if(v==null) return null; if(v>=120) return 'urgent'; if(v>=90) return 'high'; if(v>80) return 'watch'; return 'ok'; }
+const ZWORD = {ok:'Нормално', watch:'Внимание', high:'Повишено', urgent:'Много високо'};
+function sysZone(v){ if(v==null) return null; if(v>=180) return 'urgent'; if(v>SYS_MAX) return 'high'; return 'ok'; }
+function diaZone(v){ if(v==null) return null; if(v>=120) return 'urgent'; if(v>DIA_MAX) return 'high'; return 'ok'; }
+function gapOf(r){ return r && r.sys!=null && r.dia!=null ? r.sys - r.dia : null; }
+function narrow(r){ const g = gapOf(r); return g!=null && g<GAP_MIN; }
+function gapTag(r){ return narrow(r) ? `<span class="dlt gap">↕ ${gapOf(r)}</span>` : ''; }
+function readingsOf(list){ const R = []; list.forEach(e=>e && e.readings && e.readings.forEach(r=>{ if(gapOf(r)!=null) R.push(r); })); return R; }
+// Is the bottom number getting too close to the top one?
+function gapLine(add, list, prevList){
+  const R = readingsOf(list); if(!R.length) return;
+  const n = R.filter(narrow).length, avg = r0(mean(R.map(gapOf)));
+  let trend = '';
+  const P = prevList ? readingsOf(prevList) : [];
+  if(P.length){ const pa = r0(mean(P.map(gapOf))); if(avg <= pa-4) trend = ` Разликата намалява: <b>${pa} → ${avg}</b>.`; }
+  if(n) add('high','↕️', `Долната граница е близо до горната (разлика под ${GAP_MIN}) в <b>${n} от ${R.length}</b> измервания.${trend} Кажи на лекаря.`);
+  else if(trend) add('watch','↕️', `Разликата между горната и долната граница е средно ${avg}.${trend}`);
+}
 function pulseZone(v){ if(v==null) return null; if(v>120||v<45) return 'high'; if(v>100||v<55) return 'watch'; return 'ok'; }
 function zoneFor(f,v){ return f==='sys'?sysZone(v):f==='dia'?diaZone(v):pulseZone(v); }
 function worse(a,b){ if(!a) return b; if(!b) return a; return RANK[a]>=RANK[b]?a:b; }
@@ -382,7 +402,7 @@ function patterns(list){
 }
 
 /* ============ TEXT INSIGHTS ============ */
-const STEPS_HIGH = 'Седни спокойно 5 минути и измери отново · вземи хапчето за кръвно, както е предписано · без солена храна и допълнително кафе днес · пий вода · чай с джинджифил/лимон и спокойна разходка. Ако остане над 130 няколко дни — обади се на лекаря.';
+const STEPS_HIGH = 'почини 5 мин и измери пак · хапчето, ако не си го взела · без сол и кафе · вода, чай, разходка. Повишено няколко дни → лекар.';
 
 function weekInsights(st, prev){
   const L = []; const add = (tone,icon,text)=>L.push({tone,icon,text});
@@ -391,12 +411,12 @@ function weekInsights(st, prev){
     return L;
   }
   const z = st.zone;
-  add(z,'🩺', `Средно кръвно (от дневните средни) <b>${st.sys}/${st.dia}</b>${st.pulse?`, пулс <b>${st.pulse}</b>`:''} — <b>${ZWORD[z].toLowerCase()}</b>.`);
+  add(z,'🩺', `Средно кръвно <b>${st.sys}/${st.dia}</b>${st.pulse?`, пулс <b>${st.pulse}</b>`:''} — <b>${ZWORD[z].toLowerCase()}</b>.`);
   const of = st.elapsed && st.elapsed<7 ? st.elapsed : 7;
   add(st.n>=of-1?'ok':'info','📅', `Измерено в <b>${st.n} от ${of}</b> дни${st.n<of-1?' — опитай да мериш всеки ден по едно и също време.':'. Чудесна редовност!'}`);
   if(st.n>1) add('info','↕️', `Най-високо <b>${st.max.e.sys}/${st.max.e.dia}</b> ${DAYS_ON[dow(st.max.iso)]}; най-ниско <b>${st.min.e.sys}/${st.min.e.dia}</b> ${DAYS_ON[dow(st.min.iso)]}.`);
-  if(st.high) add('high','⚠️', `<b>${st.high} ${pl(st.high,'ден','дни')}</b> над 130 тази седмица.`);
-  else if(st.n>=3) add('ok','✅', 'Нито един ден над 130 тази седмица. Браво!');
+  if(st.high) add('high','⚠️', `<b>${st.high} ${pl(st.high,'ден','дни')}</b> с повишено кръвно (над ${SYS_MAX}/${DIA_MAX}).`);
+  else if(st.n>=3) add('ok','✅', 'Нито един ден с повишено кръвно тази седмица. Браво!');
   if(prev && prev.n){
     const d = st.sys - prev.sys;
     if(d<=-3) add('ok','👏', `Горната граница е с <b>${-d} по-ниска</b> от миналата седмица (${prev.sys}/${prev.dia}).`);
@@ -419,10 +439,10 @@ function weekInsights(st, prev){
   const pt = patterns(sortedEntries(addDays(st.mon,-63), addDays(st.mon,6)));
   if(pt.helps[0]){ const h = pt.helps[0]; add('ok','💡', `Твоята закономерност: в дните с „<b>${h.it.label.toLowerCase()}</b>“ горната граница е с около <b>${-h.ef.diff} по-ниска</b> (${h.ef.yes} срещу ${h.ef.no}).`); }
   dropLine(add, st.days.filter(d=>d.e).map(d=>d.e));
+  gapLine(add, st.days.map(d=>d.e), prev ? prev.days.map(d=>d.e) : null);
   amPmLine(add, sortedEntries(addDays(st.mon,-63), addDays(st.mon,6)));
   if(pt.links[0]){ const l = pt.links[0]; add('watch','🔎', `<b>${l.it.label}</b> се появява в дни с по-високо кръвно (${l.ef.yes} срещу ${l.ef.no}).`); }
   if(RANK[z]>=2 || st.high>=2) add('high','👉', `<b>Какво да направиш:</b> ${STEPS_HIGH}`);
-  else if(z==='watch') add('watch','👉', '<b>Наблюдавай:</b> по-малко сол, повече вода, всеки ден разходка или гимнастика, добър сън. Целта е 120 или по-ниско.');
   return L;
 }
 
@@ -446,23 +466,33 @@ function tenInsights(weeks){
     const best = w.reduce((m,x)=>x.sys<m.sys?x:m), worst = w.reduce((m,x)=>x.sys>m.sys?x:m);
     add('info','🏆', `Най-добра седмица: <b>${nice(best.mon)}</b> (${best.sys}/${best.dia}). Най-трудна: <b>${nice(worst.mon)}</b> (${worst.sys}/${worst.dia}).`);
   }
-  const hiW = w.filter(x=>x.sys>130).length, hiD = w.reduce((s,x)=>s+x.high,0);
-  if(hiW) add('high','⚠️', `<b>${hiW} ${pl(hiW,'седмица','седмици')}</b> със средно над 130 и общо <b>${hiD}</b> ${pl(hiD,'ден','дни')} с високо кръвно.`);
-  else add('ok','✅', `Нито една седмица със средно над 130.${hiD?` (${hiD} ${pl(hiD,'отделен ден','отделни дни')} с високо.)`:''}`);
+  const hiW = w.filter(x=>x.sys>SYS_MAX || x.dia>DIA_MAX).length, hiD = w.reduce((s,x)=>s+x.high,0);
+  if(hiW) add('high','⚠️', `<b>${hiW} ${pl(hiW,'седмица','седмици')}</b> със средно над ${SYS_MAX}/${DIA_MAX} и общо <b>${hiD}</b> ${pl(hiD,'ден','дни')} с високо кръвно.`);
+  else add('ok','✅', `Нито една седмица със средно над ${SYS_MAX}/${DIA_MAX}.${hiD?` (${hiD} ${pl(hiD,'отделен ден','отделни дни')} с високо.)`:''}`);
   const logged = weeks.reduce((s,x)=>s+x.logged,0), pills = weeks.reduce((s,x)=>s+x.count['precautions:pill'],0);
   if(logged) add(pills/logged>=0.9?'ok':'watch','💊', `Хапчето е отбелязано в <b>${Math.round(pills/logged*100)}%</b> от записаните дни.`);
   const pt = patterns(all);
   if(pt.helps.length) add('ok','💡', 'Какво изглежда, че ти помага: '+pt.helps.slice(0,3).map(h=>`<b>${h.it.label.toLowerCase()}</b> (−${-h.ef.diff})`).join(', ')+'.');
   else if(all.length>=10) add('info','💡','Още няма ясна връзка с навиците — продължавай да ги отбелязваш всеки ден.');
   dropLine(add, sortedEntries(weeks[0].mon, addDays(weeks[weeks.length-1].mon,6)));
+  { const dw = weeks.filter(x=>x.n), k = Math.max(0, dw.length-3);
+    const ent = ws => ws.flatMap(x=>x.days.map(d=>d.e));
+    gapLine(add, ent(dw.slice(k)), dw.length>=4 ? ent(dw.slice(0,k)) : null); }
   amPmLine(add, sortedEntries(weeks[0].mon, addDays(weeks[weeks.length-1].mon,6)));
   if(pt.links.length) add('watch','🔎', 'Симптоми, които идват с по-високо кръвно: '+pt.links.slice(0,3).map(l=>`<b>${l.it.label.toLowerCase()}</b> (+${l.ef.diff})`).join(', ')+'.');
-  if(RANK[z]>=2 || hiW>=2) add('high','👉', '<b>Препоръка:</b> разпечатай тази страница и я покажи на лекаря. '+STEPS_HIGH);
+  if(RANK[z]>=2 || hiW>=2) add('high','👉', '<b>Препоръка:</b> разпечатай тази страница и я покажи на лекаря.');
   return L;
 }
 
-function insightList(L){
-  return `<ul class="ins">${L.map(x=>`<li class="${x.tone}"><span class="i">${x.icon}</span><span>${x.text}</span></li>`).join('')}</ul>`;
+const TONE_ORDER = {urgent:0, high:1, watch:2, ok:3, info:4};
+function insightList(L, n=4){
+  if(!L.length) return '';
+  const rest = L.slice(1).map((x,i)=>({x,i})).sort((a,b)=>(TONE_ORDER[a.x.tone]-TONE_ORDER[b.x.tone]) || a.i-b.i).map(o=>o.x);
+  const all = [L[0], ...rest];
+  const li = x => `<li class="${x.tone}"><span class="i">${x.icon}</span><span>${x.text}</span></li>`;
+  const vis = all.slice(0,n), more = all.slice(n);
+  return `<ul class="ins">${vis.map(li).join('')}</ul>` +
+    (more.length ? `<details class="more"><summary>Още ${more.length} ${pl(more.length,'бележка','бележки')}</summary><ul class="ins">${more.map(li).join('')}</ul></details>` : '');
 }
 
 /* ============ UI STATE ============ */
@@ -495,13 +525,14 @@ function dayBanner(r){
   const z = dayZone(r);
   const head = `<b>${hhmm(r.m)} → ${r.sys}/${r.dia}</b>${r.pulse!=null?` · пулс ${r.pulse}`:''} — <b>${ZWORD[z]}</b>`;
   let body = '';
-  if(z==='ok') body = '<div>Чудесно — продължавай така. 👍</div>';
-  if(z==='watch') body = '<div>Между 121 и 130. Наблюдавай: по-малко сол, пий вода, кратка разходка, добра почивка.</div>';
-  if(z==='high') body = `<ul><li>Седни спокойно 5 минути и измери отново (натисни „Ново измерване“)</li><li>Вземи хапчето за кръвно, ако още не си</li><li>Без солена храна и допълнително кафе днес</li><li>Вода, чай с джинджифил/лимон, спокойна разходка</li><li>Над 130 няколко дни подред → обади се на лекаря</li></ul>`;
+  if(z==='ok') body = '<div>Нормално — продължавай така. 👍</div>';
+  if(z==='high') body = `<ul><li>Почини 5 мин и натисни „Ново измерване“</li><li>Хапчето, ако не си го взела · без сол и кафе</li><li>Повишено няколко дни подред → лекар</li></ul>`;
   if(z==='urgent') body = `<div>Почини 5 минути и измери отново. <b>Ако пак е толкова високо или имаш болка в гърдите, силно главоболие, проблем със зрението или говора — обади се веднага на 112.</b></div>`;
   let pulse = '';
-  if(r.pulse!=null && pulseZone(r.pulse)!=='ok') pulse = `<div style="margin-top:6px">Пулс ${r.pulse} е ${r.pulse>100?'висок':'нисък'} — почини и измери отново; кажи на лекаря, ако се повтаря.</div>`;
-  return `<div class="banner ${z}">${head}${body}${pulse}</div>`;
+  if(narrow(r)) pulse += `<div style="margin-top:6px">↕️ Разликата между горната и долната граница е само <b>${gapOf(r)}</b> (под ${GAP_MIN}). Ако се повтаря — кажи на лекаря.</div>`;
+  if(r.pulse!=null && pulseZone(r.pulse)!=='ok') pulse += `<div style="margin-top:6px">Пулс ${r.pulse} е ${r.pulse>100?'висок':'нисък'} — почини и измери отново; кажи на лекаря, ако се повтаря.</div>`;
+  const bz = z==='ok' && narrow(r) ? 'watch' : z;
+  return `<div class="banner ${bz}">${head}${body}${pulse}</div>`;
 }
 
 const TIMES = [[420,'Сутрин'],[600,'Преди обед'],[780,'Обед'],[960,'Следобед'],[1140,'Вечер'],[1320,'Преди сън']];
@@ -512,7 +543,7 @@ function bpCard(){
     return `<button class="rd ${r===cur?'sel':''}" data-act="rsel" data-i="${i}">
       <span class="tm">🕗 ${hhmm(r.m)}</span>
       <span class="bpv ${z?'v-'+z:''}">${r.sys??'–'}/${r.dia??'–'}</span>
-      ${deltaTag(R,i)}
+      ${deltaTag(R,i)}${gapTag(r)}
       <span class="pl">${r.pulse!=null?'♥ '+r.pulse:''}</span>
       <span class="ed">${r===cur?'✏️':''}</span></button>`;
   }).join('');
@@ -534,7 +565,7 @@ function bpCard(){
       ${bpBlock('sys','Горна граница','Систолно (горно)')}
       ${bpBlock('dia','Долна граница','Диастолно (долно)')}
       ${bpBlock('pulse','Пулс','Удара в минута')}
-      <div class="legend"><span class="l-ok">До 120 нормално</span><span class="l-watch">121–130 внимание</span><span class="l-high">Над 130 действай</span></div>
+      <div class="legend"><span class="l-ok">До ${SYS_MAX} / ${DIA_MAX} нормално</span><span class="l-high">Над това — повишено</span><span class="l-watch">Разлика под ${GAP_MIN}</span></div>
       ${dayBanner(cur)}
       <button class="delr" data-act="rdel">🗑️ Изтрий това измерване</button>
     </div>`;
@@ -575,14 +606,14 @@ function weekChart(st){
   const lo = Math.min(60, Math.floor((Math.min(...pts.map(p=>p.r.dia))-5)/10)*10);
   const hi = Math.max(150, Math.ceil((Math.max(...pts.map(p=>p.r.sys))+8)/10)*10);
   const X = v => pl + v*(W-pl-pr)/7, Y = v => pt + (hi-v)*(H-pt-pb)/(hi-lo);
-  let g = `<rect x="${pl}" y="${Y(hi)}" width="${W-pl-pr}" height="${Y(130)-Y(hi)}" fill="#fde9e8"/><rect x="${pl}" y="${Y(130)}" width="${W-pl-pr}" height="${Y(120)-Y(130)}" fill="#fff3dc"/>`;
+  let g = `<rect x="${pl}" y="${Y(hi)}" width="${W-pl-pr}" height="${Y(SYS_MAX)-Y(hi)}" fill="#fde9e8"/>`;
   for(let v=lo; v<=hi; v+=10) g += `<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e3e8ee"/><text x="${pl-6}" y="${Y(v)+5}" text-anchor="end" font-size="13" fill="#5c6b7a">${v}</text>`;
   for(let i=0;i<7;i++){
     if(i) g += `<line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${H-pb}" stroke="#d0d7df" stroke-dasharray="3 4"/>`;
     g += `<text x="${X(i+0.5)}" y="${H-10}" text-anchor="middle" font-size="13" fill="#5c6b7a">${DS[i]}</text>`;
   }
-  g += `<line x1="${pl}" x2="${W-pr}" y1="${Y(130)}" y2="${Y(130)}" stroke="#c62828" stroke-dasharray="6 5" stroke-width="1.5"/>`;
-  g += `<line x1="${pl}" x2="${W-pr}" y1="${Y(120)}" y2="${Y(120)}" stroke="#2e7d32" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  g += `<line x1="${pl}" x2="${W-pr}" y1="${Y(SYS_MAX)}" y2="${Y(SYS_MAX)}" stroke="#c62828" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  g += `<line x1="${pl}" x2="${W-pr}" y1="${Y(DIA_MAX)}" y2="${Y(DIA_MAX)}" stroke="#2f5d8a" stroke-dasharray="6 5" stroke-width="1.5"/>`;
   const path = k => 'M'+pts.map(p=>X(p.x).toFixed(1)+' '+Y(p.r[k]).toFixed(1)).join(' L');
   g += `<path d="${path('sys')}" fill="none" stroke="#c62828" stroke-width="2.5" stroke-linejoin="round"/>`;
   g += `<path d="${path('dia')}" fill="none" stroke="#2f5d8a" stroke-width="2.5" stroke-linejoin="round"/>`;
@@ -648,7 +679,7 @@ function renderWeek(){
     const sy = e ? e.symptoms.map(id=>itemOf('symptoms',id)?.icon||'').join(' ') : '';
     const lines = R.length ? R.map((r,j)=>{
       const z = r.sys!=null && r.dia!=null ? dayZone(r) : '';
-      return `<span class="rline"><span class="t">${hhmm(r.m)}</span><span class="v ${z?'v-'+z:''}">${r.sys??'–'}/${r.dia??'–'}</span>${deltaTag(R,j)}<span class="note">${r.pulse!=null?'♥ '+r.pulse:''}</span></span>`;
+      return `<span class="rline"><span class="t">${hhmm(r.m)}</span><span class="v ${z?'v-'+z:''}">${r.sys??'–'}/${r.dia??'–'}</span>${deltaTag(R,j)}${gapTag(r)}<span class="note">${r.pulse!=null?'♥ '+r.pulse:''}</span></span>`;
     }).join('') : '<span class="note">–</span>';
     return `<button class="wrow" data-act="open" data-d="${d.iso}" ${d.iso>t?'disabled':''}>
       <span class="dl">${DS[i]}<br><small class="note">${nice(d.iso)}</small></span>
@@ -665,7 +696,7 @@ function renderWeek(){
       <div class="stat ${st.zone||''}"><div class="k">Средно кръвно</div><div class="v">${st.n?st.sys+'/'+st.dia:'–'}</div></div>
       <div class="stat"><div class="k">Среден пулс</div><div class="v">${st.pulse??'–'}</div></div>
       <div class="stat"><div class="k">Дни с измерване</div><div class="v">${st.n}/7</div></div>
-      <div class="stat ${st.high?'high':st.n?'ok':''}"><div class="k">Дни над 130</div><div class="v">${st.high}</div></div>
+      <div class="stat ${st.high?'high':st.n?'ok':''}"><div class="k">Дни с повишено</div><div class="v">${st.high}</div></div>
     </div>
   </section>
   <section class="card"><h2>📝 Седмичен преглед</h2>${insightList(weekInsights(st, prev))}</section>
@@ -687,16 +718,15 @@ function tenChart(weeks){
   const x = i => pl + i*(W-pl-pr)/(weeks.length-1);
   const y = v => pt + (hi-v)*(H-pt-pb)/(hi-lo);
   let g = '';
-  g += `<rect x="${pl}" y="${y(hi)}" width="${W-pl-pr}" height="${y(130)-y(hi)}" fill="#fde9e8"/>`;
-  g += `<rect x="${pl}" y="${y(130)}" width="${W-pl-pr}" height="${y(120)-y(130)}" fill="#fff3dc"/>`;
+  g += `<rect x="${pl}" y="${y(hi)}" width="${W-pl-pr}" height="${y(SYS_MAX)-y(hi)}" fill="#fde9e8"/>`;
   for(let v=lo; v<=hi; v+=10){
     g += `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e8ee"/>`;
     g += `<text x="${pl-6}" y="${y(v)+5}" text-anchor="end" font-size="13" fill="#5c6b7a">${v}</text>`;
   }
-  g += `<line x1="${pl}" x2="${W-pr}" y1="${y(130)}" y2="${y(130)}" stroke="#c62828" stroke-dasharray="6 5" stroke-width="1.5"/>`;
-  g += `<text x="${W-pr-2}" y="${y(130)-5}" text-anchor="end" font-size="12" fill="#c62828">130</text>`;
-  g += `<line x1="${pl}" x2="${W-pr}" y1="${y(120)}" y2="${y(120)}" stroke="#2e7d32" stroke-dasharray="6 5" stroke-width="1.5"/>`;
-  g += `<text x="${W-pr-2}" y="${y(120)+15}" text-anchor="end" font-size="12" fill="#2e7d32">120</text>`;
+  g += `<line x1="${pl}" x2="${W-pr}" y1="${y(SYS_MAX)}" y2="${y(SYS_MAX)}" stroke="#c62828" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  g += `<text x="${W-pr-2}" y="${y(SYS_MAX)-5}" text-anchor="end" font-size="12" fill="#c62828">${SYS_MAX}</text>`;
+  g += `<line x1="${pl}" x2="${W-pr}" y1="${y(DIA_MAX)}" y2="${y(DIA_MAX)}" stroke="#2f5d8a" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  g += `<text x="${W-pr-2}" y="${y(DIA_MAX)-5}" text-anchor="end" font-size="12" fill="#2f5d8a">${DIA_MAX}</text>`;
   const line = (key, color) => {
     let d = '', pen = false;
     weeks.forEach((w,i)=>{ if(w.n){ d += (pen?'L':'M')+x(i).toFixed(1)+' '+y(w[key]).toFixed(1)+' '; pen = true; } else pen = false; });
@@ -734,13 +764,13 @@ function renderTen(){
       <button class="arrow" data-act="tweek" data-d="7" ${addDays(end,7)>t?'disabled':''} aria-label="напред">›</button>
     </div>
     <h2>📈 Сравнение за 10 седмици</h2>
-    <p class="hint">Средно кръвно за всяка седмица. Червено = над 130, жълто = 121–130.</p>
+    <p class="hint">Средно кръвно за всяка седмица. Пунктирните линии са границите ${SYS_MAX} и ${DIA_MAX}.</p>
     ${tenChart(weeks)}
   </section>
   <section class="card"><h2>📝 Какво показват данните</h2>${insightList(tenInsights(weeks))}</section>
   <section class="card">
     <h2>📊 Седмица по седмица</h2>
-    <div class="tablewrap"><table><thead><tr><th>Седмица</th><th>Кръвно</th><th>Пулс</th><th>Дни</th><th>&gt;130</th><th>Хапче</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>Седмица</th><th>Кръвно</th><th>Пулс</th><th>Дни</th><th>Повиш.</th><th>Хапче</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="noprint" style="margin-top:12px"><button class="btn" data-act="print">🖨️ Разпечатай за лекаря</button></p>
   </section>`;
 }
