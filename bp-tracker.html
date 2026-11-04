@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Моето кръвно</title>
+<meta name="theme-color" content="#2f5d8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Кръвно">
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --ink:#1d2733; --muted:#5c6b7a; --line:#dde3ea;
+    --brand:#2f5d8a; --brand-soft:#e6eef7;
+    --ok:#2e7d32; --ok-bg:#e7f5e8;
+    --watch:#a65f00; --watch-bg:#fff3dc;
+    --high:#c62828; --high-bg:#fde9e8;
+    --urgent:#ffffff; --urgent-bg:#b71c1c;
+    --sym:#a65f00; --sym-bg:#fff3dc;
+    --hab:#2e7d32; --hab-bg:#e7f5e8;
+    --pre:#2f5d8a; --pre-bg:#e6eef7;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .top{background:var(--brand);color:#fff;padding:14px 16px 10px;text-align:center}
+  .top h1{margin:0;font-size:22px;font-weight:700}
+  .tabs{position:sticky;top:0;z-index:5;display:flex;gap:6px;padding:8px 12px;background:var(--brand)}
+  .tabs button{flex:1;min-width:0;border:0;border-radius:12px;padding:12px 4px;background:rgba(255,255,255,.15);color:#fff;font-weight:700;font-size:17px}
+  .tabs button.on{background:#fff;color:var(--brand)}
+  main{max-width:720px;margin:0 auto;padding:12px 16px 40px;overflow-x:hidden}
+  .tablewrap{overflow-x:auto}
+  .card{background:var(--card);border-radius:18px;padding:16px;margin:0 0 14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .card h2{margin:0 0 4px;font-size:20px}
+  .card h3{margin:16px 0 8px;font-size:18px}
+  .hint{color:var(--muted);font-size:15px;margin:0 0 12px}
+
+  /* week strip */
+  .weeknav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+  .weeknav .lbl{font-weight:700;text-align:center;flex:1}
+  .arrow{border:0;background:var(--brand-soft);color:var(--brand);border-radius:12px;min-width:52px;height:48px;font-size:22px;font-weight:700}
+  .arrow:disabled{opacity:.3}
+  .strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+  .dbtn{border:2px solid var(--line);background:#fff;border-radius:12px;padding:8px 0 6px;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:76px}
+  .dbtn .dn{font-size:14px;color:var(--muted);font-weight:600}
+  .dbtn .dd{font-size:20px;font-weight:800}
+  .dbtn .dot{width:12px;height:12px;border-radius:50%;background:transparent;border:2px solid var(--line)}
+  .dbtn.sel{border-color:var(--brand);background:var(--brand-soft)}
+  .dbtn.today .dd{color:var(--brand);text-decoration:underline}
+  .dbtn:disabled{opacity:.35}
+  .dot.ok{background:var(--ok);border-color:var(--ok)}
+  .dot.watch{background:#f0a020;border-color:#f0a020}
+  .dot.high,.dot.urgent{background:var(--high);border-color:var(--high)}
+  .dot.part{background:#b9c4cf;border-color:#b9c4cf}
+  .dayttl{font-size:22px;font-weight:800;margin:14px 0 0;text-align:center}
+  .todaybtn{display:block;margin:8px auto 0;border:0;background:none;color:var(--brand);font-weight:700;text-decoration:underline;font-size:16px;padding:6px}
+
+  /* BP */
+  .bp-field{border-top:1px solid var(--line);padding:14px 0 6px}
+  .bp-field:first-of-type{border-top:0;padding-top:4px}
+  .bp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .bp-label{font-weight:800;font-size:19px}
+  .bp-sub{color:var(--muted);font-size:14px}
+  .bp-adjust{display:flex;align-items:center;gap:8px}
+  .pm{width:52px;height:52px;border-radius:50%;border:0;background:var(--brand-soft);color:var(--brand);font-size:28px;font-weight:800;line-height:1}
+  .bp-value{min-width:84px;text-align:center;font-size:34px;font-weight:900;border-radius:14px;padding:4px 8px;background:#f0f2f5;color:var(--muted)}
+  .chips{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+  .chip{border:2px solid transparent;border-radius:12px;padding:10px 0;font-size:19px;font-weight:700;background:#f0f2f5}
+  .chip.z-ok{background:var(--ok-bg);color:var(--ok)}
+  .chip.z-watch{background:var(--watch-bg);color:var(--watch)}
+  .chip.z-high,.chip.z-urgent{background:var(--high-bg);color:var(--high)}
+  .chip.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink) inset;transform:scale(1.03)}
+  .v-ok{background:var(--ok-bg);color:var(--ok)}
+  .v-watch{background:var(--watch-bg);color:var(--watch)}
+  .v-high{background:var(--high-bg);color:var(--high)}
+  .v-urgent{background:var(--urgent-bg);color:var(--urgent)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;color:var(--muted);margin-top:10px}
+  .legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .legend .l-ok::before{background:var(--ok)} .legend .l-watch::before{background:#f0a020} .legend .l-high::before{background:var(--high)}
+  .banner{border-radius:14px;padding:12px 14px;margin-top:12px;font-size:17px}
+  .banner b{font-size:19px}
+  .banner.ok{background:var(--ok-bg);color:#1f5a23}
+  .banner.watch{background:var(--watch-bg);color:#7a4600}
+  .banner.high{background:var(--high-bg);color:#8e1b1b}
+  .banner.urgent{background:var(--urgent-bg);color:#fff}
+  .banner ul{margin:6px 0 0;padding-left:20px}
+  .clear{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:15px;padding:8px 0 0}
+
+  /* toggles */
+  .tgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+  .tog{display:flex;align-items:center;gap:8px;border:2px solid var(--line);background:#fff;border-radius:14px;padding:12px 10px;text-align:left;min-height:60px;font-weight:600;font-size:17px}
+  .tog .ic{font-size:24px}
+  .tog .tx{flex:1;min-width:0;overflow-wrap:anywhere;hyphens:auto}
+  .tog .ck{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;flex:none}
+  .tog.on.symptoms{background:var(--sym-bg);border-color:var(--sym)} .tog.on.symptoms .ck{background:var(--sym);border-color:var(--sym);color:#fff}
+  .tog.on.habits{background:var(--hab-bg);border-color:var(--hab)} .tog.on.habits .ck{background:var(--hab);border-color:var(--hab);color:#fff}
+  .tog.on.precautions{background:var(--pre-bg);border-color:var(--pre)} .tog.on.precautions .ck{background:var(--pre);border-color:var(--pre);color:#fff}
+
+  /* summaries */
+  .mini{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:6px 0 12px}
+  .mcol{border:0;background:#f4f6f9;border-radius:10px;padding:6px 0;text-align:center;font-size:13px}
+  .mcol .n{font-weight:800;font-size:15px;display:block;line-height:1.2}
+  .mcol.sel{outline:2px solid var(--brand)}
+  .mcol.ok{background:var(--ok-bg);color:var(--ok)} .mcol.watch{background:var(--watch-bg);color:var(--watch)} .mcol.high,.mcol.urgent{background:var(--high-bg);color:var(--high)}
+  .ins{list-style:none;margin:0;padding:0}
+  .ins li{display:flex;gap:10px;padding:10px 12px;border-radius:12px;margin-bottom:6px;background:#f4f6f9;font-size:17px}
+  .ins li .i{font-size:20px;flex:none}
+  .ins li span:last-child{min-width:0;overflow-wrap:anywhere}
+  .ins li.ok{background:var(--ok-bg)} .ins li.watch{background:var(--watch-bg)} .ins li.high,.ins li.urgent{background:var(--high-bg)}
+  .stats{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:6px}
+  .stat{background:#f4f6f9;border-radius:14px;padding:10px 12px}
+  .stat .k{font-size:14px;color:var(--muted)}
+  .stat .v{font-size:26px;font-weight:900}
+  .stat.ok{background:var(--ok-bg)} .stat.ok .v{color:var(--ok)}
+  .stat.watch{background:var(--watch-bg)} .stat.watch .v{color:var(--watch)}
+  .stat.high,.stat.urgent{background:var(--high-bg)} .stat.high .v,.stat.urgent .v{color:var(--high)}
+  .drow{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left}
+  .drow .dl{width:64px;font-weight:700}
+  .drow .bp{min-width:96px;font-weight:800;font-size:19px;border-radius:10px;padding:2px 8px;text-align:center}
+  .drow .ex{flex:1;font-size:18px;letter-spacing:1px}
+  .trk{display:flex;align-items:center;gap:8px;padding:6px 0}
+  .trk .tl{flex:1;font-size:16px}
+  .trk .dots{display:flex;gap:4px}
+  .trk .dots i{width:16px;height:16px;border-radius:50%;background:#e3e8ee;display:block}
+  .trk .dots i.y.habits{background:var(--hab)} .trk .dots i.y.precautions{background:var(--pre)} .trk .dots i.y.symptoms{background:#f0a020}
+  .trk .dots i.none{background:transparent;border:2px dashed #d0d7df}
+  .trk .c{width:34px;text-align:right;font-weight:800}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:8px 3px;text-align:center;border-top:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:13px}
+  td.bpc{font-weight:800;border-radius:8px}
+  svg text{font-family:inherit}
+  .btn{display:inline-block;border:0;border-radius:12px;padding:12px 16px;font-weight:700;background:var(--brand);color:#fff;margin:4px 6px 4px 0}
+  .btn.ghost{background:var(--brand-soft);color:var(--brand)}
+  .note{font-size:14px;color:var(--muted)}
+  .warnbox{background:var(--watch-bg);color:#7a4600;border-radius:12px;padding:10px 12px;font-size:15px;margin-bottom:10px}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(80px);background:#1d2733;color:#fff;padding:10px 18px;border-radius:24px;font-weight:700;transition:transform .25s;z-index:20;pointer-events:none}
+  #toast.show{transform:translateX(-50%) translateY(0)}
+  @media (max-width:380px){ body{font-size:17px} .chips{grid-template-columns:repeat(4,minmax(0,1fr))} .tgrid{grid-template-columns:minmax(0,1fr)} .tabs button{font-size:15px} .bp-value{min-width:72px;font-size:30px} .pm{width:46px;height:46px} }
+  @media print{ .tabs,.noprint,#toast{display:none!important} body{background:#fff} .card{box-shadow:none;border:1px solid #ccc;break-inside:avoid} }
+</style>
+</head>
+<body>
+<header class="top"><h1>❤️ Моето кръвно налягане</h1></header>
+<nav class="tabs">
+  <button data-act="tab" data-tab="day">📅 Ден</button>
+  <button data-act="tab" data-tab="week">📊 Седмица</button>
+  <button data-act="tab" data-tab="ten">📈 10 седмици</button>
+</nav>
+<main id="app"></main>
+<div id="toast"></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+/* ============ SETTINGS (edit lists here) ============ */
+const SYMPTOMS = [
+  {id:'tired',    icon:'😴', label:'Умора'},
+  {id:'coldfeet', icon:'🧦', label:'Студени крака'},
+  {id:'headache', icon:'🤕', label:'Главоболие'},
+  {id:'dizzy',    icon:'💫', label:'Световъртеж'},
+  {id:'heart',    icon:'💓', label:'Сърцебиене'},
+  {id:'neck',     icon:'😣', label:'Натиск в тила'},
+];
+const HABITS = [
+  {id:'sleep', icon:'🛌', label:'Добър сън'},
+  {id:'gym',   icon:'🤸', label:'Гимнастика'},
+  {id:'steps', icon:'👟', label:'Дневни стъпки'},
+  {id:'water', icon:'💧', label:'Вода'},
+  {id:'food',  icon:'🥗', label:'Здравословна храна'},
+];
+const PRECAUTIONS = [
+  {id:'pill',   icon:'💊', label:'Хапче за кръвно'},
+  {id:'tea',    icon:'🍋', label:'Чай с джинджифил / лимон'},
+  {id:'yogurt', icon:'🥛', label:'Кисело мляко'},
+  {id:'salt',   icon:'🧂', label:'Малко сол днес'},
+  {id:'relax',  icon:'🧘', label:'Почивка / дишане 5 мин'},
+];
+const GROUPS = {symptoms:SYMPTOMS, habits:HABITS, precautions:PRECAUTIONS};
+// Tap-buttons for each number (step 5); +/- buttons fine-tune by 1
+const CHIPS = {
+  sys:   range(90, 185, 5),
+  dia:   range(50, 110, 5),
+  pulse: range(45, 115, 5),
+};
+const DEFAULTS = {sys:120, dia:80, pulse:70};
+
+/* ============ STORAGE ============ */
+const KEY = 'momBpTracker.v1';
+function load(){
+  try{ const raw = localStorage.getItem(KEY); if(raw){ const d = JSON.parse(raw); if(d && d.entries) return d; } }catch(e){}
+  return {entries:{}};
+}
+let db = load();
+let storageOk = true;
+function save(silent){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); storageOk = true; if(!silent) toast('Запазено ✓'); }
+  catch(e){ storageOk = false; toast('⚠️ Не се запази'); }
+}
+
+/* ============ DATE HELPERS ============ */
+const DAYS = ['Понеделник','Вторник','Сряда','Четвъртък','Петък','Събота','Неделя'];
+const DAYS_ON = ['в понеделник','във вторник','в сряда','в четвъртък','в петък','в събота','в неделя'];
+const DS = ['Пн','Вт','Ср','Чт','Пт','Сб','Нд'];
+const MONTHS = ['яну','фев','мар','апр','май','юни','юли','авг','сеп','окт','ное','дек'];
+function pl(n,one,many){ return n===1?one:many; }
+function range(a,b,s){ const r=[]; for(let i=a;i<=b;i+=s) r.push(i); return r; }
+function iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function fromIso(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function addDays(s,n){ const d = fromIso(s); d.setDate(d.getDate()+n); return iso(d); }
+function dow(s){ return (fromIso(s).getDay()+6)%7; }       // 0 = Monday
+function mondayOf(s){ return addDays(s, -dow(s)); }
+function nice(s){ const d = fromIso(s); return d.getDate()+' '+MONTHS[d.getMonth()]; }
+function today(){ return iso(new Date()); }
+
+/* ============ BP ZONES ============
+   Top (systolic): up to 120 normal · 121–130 slightly raised · above 130 high (take steps) · 180+ very high
+   Bottom (diastolic): up to 80 normal · 81–89 slightly raised · 90+ high · 120+ very high */
+const RANK = {ok:0, watch:1, high:2, urgent:3};
+const ZWORD = {ok:'Нормално', watch:'Леко повишено', high:'Високо – действай', urgent:'Много високо'};
+function sysZone(v){ if(v==null) return null; if(v>=180) return 'urgent'; if(v>130) return 'high'; if(v>120) return 'watch'; return 'ok'; }
+function diaZone(v){ if(v==null) return null; if(v>=120) return 'urgent'; if(v>=90) return 'high'; if(v>80) return 'watch'; return 'ok'; }
+function pulseZone(v){ if(v==null) return null; if(v>120||v<45) return 'high'; if(v>100||v<55) return 'watch'; return 'ok'; }
+function zoneFor(f,v){ return f==='sys'?sysZone(v):f==='dia'?diaZone(v):pulseZone(v); }
+function worse(a,b){ if(!a) return b; if(!b) return a; return RANK[a]>=RANK[b]?a:b; }
+function dayZone(e){ return e ? worse(sysZone(e.sys), diaZone(e.dia)) : null; }
+function hasBP(e){ return !!e && e.sys!=null && e.dia!=null; }
+
+/* ============ ENTRIES ============ */
+function entry(s){ return db.entries[s] || null; }
+function ensure(s){
+  if(!db.entries[s]) db.entries[s] = {sys:null, dia:null, pulse:null, symptoms:[], habits:[], precautions:[]};
+  return db.entries[s];
+}
+function tidy(s){
+  const e = db.entries[s];
+  if(e && e.sys==null && e.dia==null && e.pulse==null && !e.symptoms.length && !e.habits.length && !e.precautions.length) delete db.entries[s];
+}
+function lastValue(f){
+  const keys = Object.keys(db.entries).sort().reverse();
+  for(const k of keys){ if(db.entries[k][f]!=null) return db.entries[k][f]; }
+  return DEFAULTS[f];
+}
+function sortedEntries(from, to){
+  return Object.keys(db.entries).filter(k=>k>=from && k<=to).sort().map(k=>db.entries[k]);
+}
+
+/* ============ MATH ============ */
+function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null; }
+function r0(v){ return v==null ? null : Math.round(v); }
+function itemOf(g,id){ return GROUPS[g].find(x=>x.id===id); }
+
+function weekStats(mon){
+  const days = [];
+  for(let i=0;i<7;i++){ const s = addDays(mon,i); days.push({iso:s, e:entry(s)}); }
+  const bp = days.filter(d=>hasBP(d.e));
+  const st = {mon, days, n:bp.length, logged:days.filter(d=>d.e).length};
+  st.sys = r0(mean(bp.map(d=>d.e.sys)));
+  st.dia = r0(mean(bp.map(d=>d.e.dia)));
+  st.pulse = r0(mean(days.filter(d=>d.e && d.e.pulse!=null).map(d=>d.e.pulse)));
+  st.zone = worse(sysZone(st.sys), diaZone(st.dia));
+  st.high = bp.filter(d=>RANK[dayZone(d.e)]>=2).length;
+  st.okDays = bp.filter(d=>dayZone(d.e)==='ok').length;
+  st.max = bp.reduce((m,d)=>!m||d.e.sys>m.e.sys?d:m, null);
+  st.min = bp.reduce((m,d)=>!m||d.e.sys<m.e.sys?d:m, null);
+  st.count = {};
+  for(const g in GROUPS) for(const it of GROUPS[g]) st.count[g+':'+it.id] = days.filter(d=>d.e && d.e[g].includes(it.id)).length;
+  const t = today();
+  st.elapsed = t < mon ? 0 : Math.min(7, Math.round((fromIso(t)-fromIso(mon))/864e5)+1);
+  return st;
+}
+
+// Average top number on days WITH an item vs days WITHOUT it
+function effect(list, g, id){
+  const L = list.filter(hasBP);
+  const yes = L.filter(e=>e[g].includes(id)), no = L.filter(e=>!e[g].includes(id));
+  if(yes.length<2 || no.length<2) return null;
+  const y = mean(yes.map(e=>e.sys)), n = mean(no.map(e=>e.sys));
+  return {diff:Math.round(y-n), yes:r0(y), no:r0(n), ny:yes.length};
+}
+function patterns(list){
+  const helps = [], links = [];
+  for(const g of ['habits','precautions']) for(const it of GROUPS[g]){
+    const ef = effect(list,g,it.id); if(ef && ef.diff<=-3) helps.push({it, ef});
+  }
+  for(const it of SYMPTOMS){
+    const ef = effect(list,'symptoms',it.id); if(ef && ef.diff>=4) links.push({it, ef});
+  }
+  helps.sort((a,b)=>a.ef.diff-b.ef.diff); links.sort((a,b)=>b.ef.diff-a.ef.diff);
+  return {helps, links};
+}
+
+/* ============ TEXT INSIGHTS ============ */
+const STEPS_HIGH = 'Седни спокойно 5 минути и измери отново · вземи хапчето за кръвно, както е предписано · без солена храна и допълнително кафе днес · пий вода · чай с джинджифил/лимон и спокойна разходка. Ако остане над 130 няколко дни — обади се на лекаря.';
+
+function weekInsights(st, prev){
+  const L = []; const add = (tone,icon,text)=>L.push({tone,icon,text});
+  if(!st.n){
+    add('info','📝', st.logged ? 'Все още няма въведено кръвно тази седмица — натисни числата в страница „Ден“.' : 'Още няма записи за тази седмица.');
+    return L;
+  }
+  const z = st.zone;
+  add(z,'🩺', `Средно кръвно <b>${st.sys}/${st.dia}</b>${st.pulse?`, пулс <b>${st.pulse}</b>`:''} — <b>${ZWORD[z].toLowerCase()}</b>.`);
+  const of = st.elapsed && st.elapsed<7 ? st.elapsed : 7;
+  add(st.n>=of-1?'ok':'info','📅', `Измерено в <b>${st.n} от ${of}</b> дни${st.n<of-1?' — опитай да мериш всеки ден по едно и също време.':'. Чудесна редовност!'}`);
+  if(st.n>1) add('info','↕️', `Най-високо <b>${st.max.e.sys}/${st.max.e.dia}</b> ${DAYS_ON[dow(st.max.iso)]}; най-ниско <b>${st.min.e.sys}/${st.min.e.dia}</b> ${DAYS_ON[dow(st.min.iso)]}.`);
+  if(st.high) add('high','⚠️', `<b>${st.high} ${pl(st.high,'ден','дни')}</b> над 130 тази седмица.`);
+  else if(st.n>=3) add('ok','✅', 'Нито един ден над 130 тази седмица. Браво!');
+  if(prev && prev.n){
+    const d = st.sys - prev.sys;
+    if(d<=-3) add('ok','👏', `Горната граница е с <b>${-d} по-ниска</b> от миналата седмица (${prev.sys}/${prev.dia}).`);
+    else if(d>=3) add('watch','📈', `Горната граница е с <b>${d} по-висока</b> от миналата седмица (${prev.sys}/${prev.dia}).`);
+    else add('info','➖', `Почти същото като миналата седмица (${prev.sys}/${prev.dia}).`);
+  }
+  const sy = SYMPTOMS.map(it=>({it,c:st.count['symptoms:'+it.id]})).filter(x=>x.c).sort((a,b)=>b.c-a.c);
+  if(sy.length) add('watch','🤒', 'Симптоми: '+sy.map(x=>`${x.it.label.toLowerCase()} <b>${x.c}</b> ${pl(x.c,'ден','дни')}`).join(', ')+'.');
+  else if(st.logged>=3) add('ok','😊', 'Няма отбелязани симптоми тази седмица.');
+  if(st.logged){
+    const p = st.count['precautions:pill'];
+    if(p<st.logged) add('watch','💊', `Хапчето е отбелязано в <b>${p} от ${st.logged}</b> записани дни — опитай да не го пропускаш.`);
+    else add('ok','💊', 'Хапчето е взето във всеки записан ден 👍');
+    const hb = HABITS.map(it=>({it,c:st.count['habits:'+it.id]})).sort((a,b)=>b.c-a.c);
+    if(hb[0].c) add('ok','🌟', `Най-добър навик: <b>${hb[0].it.label.toLowerCase()}</b> (${hb[0].c} ${pl(hb[0].c,'ден','дни')}).`);
+    const weak = hb.filter(x=>x.c < st.logged/2);
+    if(weak.length) add('watch','🎯', 'Нужно е повече внимание: '+weak.slice(0,3).map(x=>`${x.it.label.toLowerCase()} (${x.c})`).join(', ')+'.');
+  }
+  // Personal patterns from the last 10 weeks
+  const pt = patterns(sortedEntries(addDays(st.mon,-63), addDays(st.mon,6)));
+  if(pt.helps[0]){ const h = pt.helps[0]; add('ok','💡', `Твоята закономерност: в дните с „<b>${h.it.label.toLowerCase()}</b>“ горната граница е с около <b>${-h.ef.diff} по-ниска</b> (${h.ef.yes} срещу ${h.ef.no}).`); }
+  if(pt.links[0]){ const l = pt.links[0]; add('watch','🔎', `<b>${l.it.label}</b> се появява в дни с по-високо кръвно (${l.ef.yes} срещу ${l.ef.no}).`); }
+  if(RANK[z]>=2 || st.high>=2) add('high','👉', `<b>Какво да направиш:</b> ${STEPS_HIGH}`);
+  else if(z==='watch') add('watch','👉', '<b>Наблюдавай:</b> по-малко сол, повече вода, всеки ден разходка или гимнастика, добър сън. Целта е 120 или по-ниско.');
+  return L;
+}
+
+function tenInsights(weeks){
+  const L = []; const add = (tone,icon,text)=>L.push({tone,icon,text});
+  const w = weeks.filter(x=>x.n);
+  if(!w.length){ add('info','📝','Няма измервания за тези 10 седмици. След няколко седмици тук ще видиш напредъка си.'); return L; }
+  const all = sortedEntries(weeks[0].mon, addDays(weeks[weeks.length-1].mon,6)).filter(hasBP);
+  const aS = r0(mean(all.map(e=>e.sys))), aD = r0(mean(all.map(e=>e.dia)));
+  const z = worse(sysZone(aS), diaZone(aD));
+  add(z,'🩺', `Средно за <b>${w.length} ${pl(w.length,'седмица','седмици')}</b> (${all.length} ${pl(all.length,'измерване','измервания')}): <b>${aS}/${aD}</b> — ${ZWORD[z].toLowerCase()}.`);
+  if(w.length>=4){
+    const recent = w.slice(-3), early = w.slice(0, w.length-3);
+    const rS = r0(mean(recent.map(x=>x.sys))), eS = r0(mean(early.map(x=>x.sys)));
+    const d = rS - eS;
+    if(d<=-3) add('ok','📉', `Подобрение: последните 3 седмици средно <b>${rS}</b>, преди това <b>${eS}</b> (с ${-d} по-ниско). Продължавай така!`);
+    else if(d>=3) add('high','📈', `Покачване: последните 3 седмици средно <b>${rS}</b>, преди това <b>${eS}</b> (с ${d} по-високо). Добре е да го обсъдиш с лекаря.`);
+    else add('info','➖', `Стабилно: последните 3 седмици (${rS}) са почти като предишните (${eS}).`);
+  } else add('info','⏳', 'След 4 седмици с измервания ще видиш дали кръвното се покачва или спада.');
+  if(w.length>1){
+    const best = w.reduce((m,x)=>x.sys<m.sys?x:m), worst = w.reduce((m,x)=>x.sys>m.sys?x:m);
+    add('info','🏆', `Най-добра седмица: <b>${nice(best.mon)}</b> (${best.sys}/${best.dia}). Най-трудна: <b>${nice(worst.mon)}</b> (${worst.sys}/${worst.dia}).`);
+  }
+  const hiW = w.filter(x=>x.sys>130).length, hiD = w.reduce((s,x)=>s+x.high,0);
+  if(hiW) add('high','⚠️', `<b>${hiW} ${pl(hiW,'седмица','седмици')}</b> със средно над 130 и общо <b>${hiD}</b> ${pl(hiD,'ден','дни')} с високо кръвно.`);
+  else add('ok','✅', `Нито една седмица със средно над 130.${hiD?` (${hiD} ${pl(hiD,'отделен ден','отделни дни')} с високо.)`:''}`);
+  const logged = weeks.reduce((s,x)=>s+x.logged,0), pills = weeks.reduce((s,x)=>s+x.count['precautions:pill'],0);
+  if(logged) add(pills/logged>=0.9?'ok':'watch','💊', `Хапчето е отбелязано в <b>${Math.round(pills/logged*100)}%</b> от записаните дни.`);
+  const pt = patterns(all);
+  if(pt.helps.length) add('ok','💡', 'Какво изглежда, че ти помага: '+pt.helps.slice(0,3).map(h=>`<b>${h.it.label.toLowerCase()}</b> (−${-h.ef.diff})`).join(', ')+'.');
+  else if(all.length>=10) add('info','💡','Още няма ясна връзка с навиците — продължавай да ги отбелязваш всеки ден.');
+  if(pt.links.length) add('watch','🔎', 'Симптоми, които идват с по-високо кръвно: '+pt.links.slice(0,3).map(l=>`<b>${l.it.label.toLowerCase()}</b> (+${l.ef.diff})`).join(', ')+'.');
+  if(RANK[z]>=2 || hiW>=2) add('high','👉', '<b>Препоръка:</b> разпечатай тази страница и я покажи на лекаря. '+STEPS_HIGH);
+  return L;
+}
+
+function insightList(L){
+  return `<ul class="ins">${L.map(x=>`<li class="${x.tone}"><span class="i">${x.icon}</span><span>${x.text}</span></li>`).join('')}</ul>`;
+}
+
+/* ============ UI STATE ============ */
+const state = {tab:'day', sel:today(), weekMon:mondayOf(today()), tenMon:mondayOf(today())};
+const app = document.getElementById('app');
+
+function render(){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===state.tab));
+  app.innerHTML = (state.tab==='day' ? renderDay() : state.tab==='week' ? renderWeek() : renderTen()) + renderBackup();
+}
+
+/* ---------- DAY ---------- */
+function bpBlock(f, label, sub){
+  const e = entry(state.sel) || {}; const v = e[f] ?? null; const z = zoneFor(f,v);
+  return `<div class="bp-field">
+    <div class="bp-head">
+      <div><div class="bp-label">${label}</div><div class="bp-sub">${sub}</div></div>
+      <div class="bp-adjust">
+        <button class="pm" data-act="adj" data-f="${f}" data-d="-1" aria-label="минус 1">−</button>
+        <div class="bp-value ${z?'v-'+z:''}">${v ?? '—'}</div>
+        <button class="pm" data-act="adj" data-f="${f}" data-d="1" aria-label="плюс 1">+</button>
+      </div>
+    </div>
+    <div class="chips">${CHIPS[f].map(n=>`<button class="chip z-${zoneFor(f,n)} ${v!=null && Math.floor(v/5)*5===n?'on':''}" data-act="set" data-f="${f}" data-v="${n}">${n}</button>`).join('')}</div>
+  </div>`;
+}
+
+function dayBanner(e){
+  if(!hasBP(e)) return '';
+  const z = dayZone(e);
+  const head = `<b>${e.sys}/${e.dia}</b>${e.pulse!=null?` · пулс ${e.pulse}`:''} — <b>${ZWORD[z]}</b>`;
+  let body = '';
+  if(z==='ok') body = '<div>Чудесно — продължавай така. 👍</div>';
+  if(z==='watch') body = '<div>Между 121 и 130. Наблюдавай: по-малко сол, пий вода, кратка разходка, добра почивка.</div>';
+  if(z==='high') body = `<ul><li>Седни спокойно 5 минути и измери отново</li><li>Вземи хапчето за кръвно, ако още не си</li><li>Без солена храна и допълнително кафе днес</li><li>Вода, чай с джинджифил/лимон, спокойна разходка</li><li>Над 130 няколко дни подред → обади се на лекаря</li></ul>`;
+  if(z==='urgent') body = `<div>Почини 5 минути и измери отново. <b>Ако пак е толкова високо или имаш болка в гърдите, силно главоболие, проблем със зрението или говора — обади се веднага на 112.</b></div>`;
+  let pulse = '';
+  if(e.pulse!=null && pulseZone(e.pulse)!=='ok') pulse = `<div style="margin-top:6px">Пулс ${e.pulse} е ${e.pulse>100?'висок':'нисък'} — почини и измери отново; кажи на лекаря, ако се повтаря.</div>`;
+  return `<div class="banner ${z}">${head}${body}${pulse}</div>`;
+}
+
+function toggles(g){
+  const e = entry(state.sel) || {symptoms:[],habits:[],precautions:[]};
+  return `<div class="tgrid">${GROUPS[g].map(it=>{
+    const on = e[g].includes(it.id);
+    return `<button class="tog ${g} ${on?'on':''}" data-act="tog" data-g="${g}" data-id="${it.id}"><span class="ic">${it.icon}</span><span class="tx">${it.label}</span><span class="ck">${on?'✓':''}</span></button>`;
+  }).join('')}</div>`;
+}
+
+function miniWeek(st){
+  return `<div class="mini">${st.days.map((d,i)=>{
+    const z = hasBP(d.e) ? dayZone(d.e) : '';
+    const fut = d.iso > today();
+    return `<button class="mcol ${z} ${d.iso===state.sel?'sel':''}" data-act="pick" data-d="${d.iso}" ${fut?'disabled':''}>${DS[i]}<span class="n">${hasBP(d.e)?d.e.sys:'–'}</span><span class="n">${hasBP(d.e)?d.e.dia:''}</span></button>`;
+  }).join('')}</div>`;
+}
+
+function renderDay(){
+  const s = state.sel, mon = mondayOf(s), t = today();
+  const strip = [0,1,2,3,4,5,6].map(i=>{
+    const d = addDays(mon,i), e = entry(d);
+    const dot = hasBP(e) ? dayZone(e) : e ? 'part' : '';
+    return `<button class="dbtn ${d===s?'sel':''} ${d===t?'today':''}" data-act="pick" data-d="${d}" ${d>t?'disabled':''}>
+      <span class="dn">${DS[i]}</span><span class="dd">${fromIso(d).getDate()}</span><span class="dot ${dot}"></span></button>`;
+  }).join('');
+  const e = entry(s);
+  const st = weekStats(mon), prev = weekStats(addDays(mon,-7));
+  return `
+  <section class="card">
+    <div class="weeknav">
+      <button class="arrow" data-act="dweek" data-d="-7" aria-label="предишна седмица">‹</button>
+      <div class="lbl">${nice(mon)} – ${nice(addDays(mon,6))}</div>
+      <button class="arrow" data-act="dweek" data-d="7" ${addDays(mon,7)>t?'disabled':''} aria-label="следваща седмица">›</button>
+    </div>
+    <div class="strip">${strip}</div>
+    <div class="dayttl">${DAYS[dow(s)]}, ${nice(s)}${s===t?' · Днес':''}</div>
+    ${s!==t?'<button class="todaybtn" data-act="gotoday">Към днес</button>':''}
+  </section>
+
+  <section class="card">
+    <h2>🩺 Кръвно налягане</h2>
+    <p class="hint">Натисни най-близкото число, после коригирай с − / +.</p>
+    ${bpBlock('sys','Горна граница','Систолно (горно)')}
+    ${bpBlock('dia','Долна граница','Диастолно (долно)')}
+    ${bpBlock('pulse','Пулс','Удара в минута')}
+    <div class="legend"><span class="l-ok">До 120 нормално</span><span class="l-watch">121–130 внимание</span><span class="l-high">Над 130 действай</span></div>
+    ${dayBanner(e)}
+    ${e && (e.sys!=null||e.dia!=null||e.pulse!=null) ? '<button class="clear" data-act="clearbp">Изчисти числата за този ден</button>' : ''}
+  </section>
+
+  <section class="card"><h2>🤒 Как се чувствам?</h2><p class="hint">Натисни симптомите, които имаш днес.</p>${toggles('symptoms')}</section>
+  <section class="card"><h2>🌿 Здравословни навици</h2><p class="hint">Натисни какво направи днес.</p>${toggles('habits')}</section>
+  <section class="card"><h2>🛡️ Превенция</h2><p class="hint">Натисни какво взе или направи днес.</p>${toggles('precautions')}</section>
+
+  <section class="card">
+    <h2>📋 Тази седмица</h2>
+    ${miniWeek(st)}
+    ${insightList(weekInsights(st, prev))}
+  </section>`;
+}
+
+/* ---------- WEEK ---------- */
+function dotsRow(st, g, it){
+  const dots = st.days.map(d=>{
+    if(!d.e) return '<i class="none"></i>';
+    return `<i class="${d.e[g].includes(it.id)?'y '+g:''}"></i>`;
+  }).join('');
+  return `<div class="trk"><span>${it.icon}</span><span class="tl">${it.label}</span><span class="dots">${dots}</span><span class="c">${st.count[g+':'+it.id]}</span></div>`;
+}
+function renderWeek(){
+  const mon = state.weekMon, t = today();
+  const st = weekStats(mon), prev = weekStats(addDays(mon,-7));
+  const rows = st.days.map((d,i)=>{
+    const e = d.e, z = hasBP(e) ? dayZone(e) : '';
+    const sy = e ? e.symptoms.map(id=>itemOf('symptoms',id)?.icon||'').join('') : '';
+    return `<button class="drow" data-act="open" data-d="${d.iso}" ${d.iso>t?'disabled':''}>
+      <span class="dl">${DS[i]}<br><small class="note">${nice(d.iso)}</small></span>
+      <span class="bp ${z?'v-'+z:''}">${hasBP(e)?e.sys+'/'+e.dia:'–'}</span>
+      <span class="note">${e&&e.pulse!=null?'♥ '+e.pulse:''}</span>
+      <span class="ex">${sy}</span></button>`;
+  }).join('');
+  return `
+  <section class="card">
+    <div class="weeknav">
+      <button class="arrow" data-act="wweek" data-d="-7" aria-label="предишна седмица">‹</button>
+      <div class="lbl">${nice(mon)} – ${nice(addDays(mon,6))}</div>
+      <button class="arrow" data-act="wweek" data-d="7" ${addDays(mon,7)>t?'disabled':''} aria-label="следваща седмица">›</button>
+    </div>
+    <div class="stats">
+      <div class="stat ${st.zone||''}"><div class="k">Средно кръвно</div><div class="v">${st.n?st.sys+'/'+st.dia:'–'}</div></div>
+      <div class="stat"><div class="k">Среден пулс</div><div class="v">${st.pulse??'–'}</div></div>
+      <div class="stat"><div class="k">Дни с измерване</div><div class="v">${st.n}/7</div></div>
+      <div class="stat ${st.high?'high':st.n?'ok':''}"><div class="k">Дни над 130</div><div class="v">${st.high}</div></div>
+    </div>
+  </section>
+  <section class="card"><h2>📝 Седмичен преглед</h2>${insightList(weekInsights(st, prev))}</section>
+  <section class="card"><h2>📅 Ден по ден</h2><p class="hint">Натисни ден, за да го отвориш.</p>${rows}</section>
+  <section class="card">
+    <h2>✔️ Навици и превенция</h2><p class="hint">Пн → Нд. Пунктирано кръгче = няма запис за деня.</p>
+    <h3>🌿 Навици</h3>${HABITS.map(it=>dotsRow(st,'habits',it)).join('')}
+    <h3>🛡️ Превенция</h3>${PRECAUTIONS.map(it=>dotsRow(st,'precautions',it)).join('')}
+    <h3>🤒 Симптоми</h3>${SYMPTOMS.map(it=>dotsRow(st,'symptoms',it)).join('')}
+  </section>`;
+}
+
+/* ---------- 10 WEEKS ---------- */
+function tenChart(weeks){
+  const W=640, H=300, pl=40, pr=14, pt=22, pb=40;
+  const vals = weeks.filter(w=>w.n);
+  const lo = Math.min(60, ...vals.map(w=>Math.floor((w.dia-5)/10)*10));
+  const hi = Math.max(150, ...vals.map(w=>Math.ceil((w.sys+8)/10)*10));
+  const x = i => pl + i*(W-pl-pr)/(weeks.length-1);
+  const y = v => pt + (hi-v)*(H-pt-pb)/(hi-lo);
+  let g = '';
+  g += `<rect x="${pl}" y="${y(hi)}" width="${W-pl-pr}" height="${y(130)-y(hi)}" fill="#fde9e8"/>`;
+  g += `<rect x="${pl}" y="${y(130)}" width="${W-pl-pr}" height="${y(120)-y(130)}" fill="#fff3dc"/>`;
+  for(let v=lo; v<=hi; v+=10){
+    g += `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="#e3e8ee"/>`;
+    g += `<text x="${pl-6}" y="${y(v)+5}" text-anchor="end" font-size="13" fill="#5c6b7a">${v}</text>`;
+  }
+  g += `<line x1="${pl}" x2="${W-pr}" y1="${y(130)}" y2="${y(130)}" stroke="#c62828" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  g += `<text x="${W-pr-2}" y="${y(130)-5}" text-anchor="end" font-size="12" fill="#c62828">130</text>`;
+  g += `<line x1="${pl}" x2="${W-pr}" y1="${y(120)}" y2="${y(120)}" stroke="#2e7d32" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  g += `<text x="${W-pr-2}" y="${y(120)+15}" text-anchor="end" font-size="12" fill="#2e7d32">120</text>`;
+  const line = (key, color) => {
+    let d = '', pen = false;
+    weeks.forEach((w,i)=>{ if(w.n){ d += (pen?'L':'M')+x(i).toFixed(1)+' '+y(w[key]).toFixed(1)+' '; pen = true; } else pen = false; });
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  };
+  g += line('sys','#c62828') + line('dia','#2f5d8a');
+  weeks.forEach((w,i)=>{
+    if(w.n){
+      const zc = {ok:'#2e7d32',watch:'#e69500',high:'#c62828',urgent:'#8e0000'}[sysZone(w.sys)];
+      g += `<circle cx="${x(i)}" cy="${y(w.sys)}" r="6" fill="${zc}" stroke="#fff" stroke-width="2"/>`;
+      g += `<text x="${x(i)}" y="${y(w.sys)-11}" text-anchor="middle" font-size="13" font-weight="700" fill="#1d2733">${w.sys}</text>`;
+      g += `<circle cx="${x(i)}" cy="${y(w.dia)}" r="5" fill="#2f5d8a" stroke="#fff" stroke-width="2"/>`;
+      g += `<text x="${x(i)}" y="${y(w.dia)+20}" text-anchor="middle" font-size="12" fill="#2f5d8a">${w.dia}</text>`;
+    }
+    const d = fromIso(w.mon);
+    g += `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="12" fill="#5c6b7a">${d.getDate()}.${d.getMonth()+1}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Средно кръвно по седмици, последните 10 седмици">${g}</svg>
+    <div class="legend"><span class="l-high">Горна граница (средно)</span><span style="color:#2f5d8a">● Долна граница (средно)</span><span>Датите = начало на седмицата</span></div>`;
+}
+
+function renderTen(){
+  const end = state.tenMon, t = today();
+  const weeks = []; for(let i=9;i>=0;i--) weeks.push(weekStats(addDays(end, -7*i)));
+  const rows = weeks.slice().reverse().map(w=>{
+    const z = w.n ? w.zone : '';
+    const pill = w.logged ? Math.round(w.count['precautions:pill']/w.logged*100)+'%' : '–';
+    return `<tr><td>${nice(w.mon)}</td><td class="bpc ${z?'v-'+z:''}">${w.n?w.sys+'/'+w.dia:'–'}</td><td>${w.pulse??'–'}</td><td>${w.n}</td><td>${w.high||(w.n?0:'–')}</td><td>${pill}</td></tr>`;
+  }).join('');
+  return `
+  <section class="card">
+    <div class="weeknav noprint">
+      <button class="arrow" data-act="tweek" data-d="-7" aria-label="назад">‹</button>
+      <div class="lbl">${nice(weeks[0].mon)} – ${nice(addDays(end,6))}</div>
+      <button class="arrow" data-act="tweek" data-d="7" ${addDays(end,7)>t?'disabled':''} aria-label="напред">›</button>
+    </div>
+    <h2>📈 Сравнение за 10 седмици</h2>
+    <p class="hint">Средно кръвно за всяка седмица. Червено = над 130, жълто = 121–130.</p>
+    ${tenChart(weeks)}
+  </section>
+  <section class="card"><h2>📝 Какво показват данните</h2>${insightList(tenInsights(weeks))}</section>
+  <section class="card">
+    <h2>📊 Седмица по седмица</h2>
+    <div class="tablewrap"><table><thead><tr><th>Седмица</th><th>Кръвно</th><th>Пулс</th><th>Дни</th><th>&gt;130</th><th>Хапче</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="noprint" style="margin-top:12px"><button class="btn" data-act="print">🖨️ Разпечатай за лекаря</button></p>
+  </section>`;
+}
+
+/* ---------- BACKUP ---------- */
+function renderBackup(){
+  const n = Object.keys(db.entries).length;
+  const lb = db.lastBackup;
+  const old = !lb || (fromIso(today()) - fromIso(lb))/864e5 > 14;
+  return `<section class="card noprint">
+    <h2>💾 Резервно копие</h2>
+    ${!storageOk ? '<div class="warnbox">⚠️ Този браузър не запазва данните (може би е частен режим). Отвори дневника в нормален прозорец.</div>' : ''}
+    ${n>=7 && old ? '<div class="warnbox">Отдавна не е правено копие — запази файл, за да не се загубят данните, ако браузърът се изчисти.</div>' : ''}
+    <p class="note">Данните се запазват автоматично в този браузър на това устройство (${n} ${pl(n,'записан ден','записани дни')})${lb?`. Последно копие: ${nice(lb)}`:''}.</p>
+    <button class="btn ghost" data-act="export">⬇️ Запази копие</button>
+    <button class="btn ghost" data-act="import">⬆️ Възстанови от файл</button>
+    <p class="note" style="margin-top:10px">Дневникът помага да забележиш закономерности. Той не замества съвета на лекаря.</p>
+  </section>`;
+}
+function exportData(){
+  db.lastBackup = today(); save(true);
+  const blob = new Blob([JSON.stringify(db,null,1)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'bp-tracker-backup-'+today()+'.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast('Копието е запазено ✓'); render();
+}
+document.getElementById('importFile').addEventListener('change', ev=>{
+  const f = ev.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try{
+      const d = JSON.parse(rd.result);
+      if(!d || typeof d.entries!=='object') throw 0;
+      for(const k in d.entries){
+        const e = d.entries[k];
+        db.entries[k] = {sys:e.sys??null, dia:e.dia??null, pulse:e.pulse??null, symptoms:e.symptoms||[], habits:e.habits||[], precautions:e.precautions||[]};
+      }
+      save(true); toast('Възстановено ✓'); render();
+    }catch(e){ toast('⚠️ Невалиден файл'); }
+    ev.target.value = '';
+  };
+  rd.readAsText(f);
+});
+
+/* ============ EVENTS ============ */
+document.addEventListener('click', ev=>{
+  const b = ev.target.closest('[data-act]'); if(!b || b.disabled) return;
+  const a = b.dataset.act, s = state.sel;
+  if(a==='tab'){ state.tab = b.dataset.tab; if(state.tab==='week') state.weekMon = mondayOf(state.sel); render(); window.scrollTo(0,0); return; }
+  if(a==='pick'){ state.sel = b.dataset.d; render(); return; }
+  if(a==='open'){ state.sel = b.dataset.d; state.tab = 'day'; render(); window.scrollTo(0,0); return; }
+  if(a==='gotoday'){ state.sel = today(); render(); return; }
+  if(a==='dweek'){
+    let n = addDays(s, +b.dataset.d); if(n>today()) n = today();
+    state.sel = n; render(); return;
+  }
+  if(a==='wweek'){ state.weekMon = addDays(state.weekMon, +b.dataset.d); render(); return; }
+  if(a==='tweek'){ state.tenMon = addDays(state.tenMon, +b.dataset.d); render(); return; }
+  if(a==='set'){ const e = ensure(s); e[b.dataset.f] = +b.dataset.v; save(); render(); return; }
+  if(a==='adj'){
+    const e = ensure(s), f = b.dataset.f;
+    e[f] = e[f]==null ? lastValue(f) : Math.max(30, Math.min(250, e[f] + (+b.dataset.d)));
+    save(); render(); return;
+  }
+  if(a==='clearbp'){ const e = ensure(s); e.sys = e.dia = e.pulse = null; tidy(s); save(); render(); return; }
+  if(a==='tog'){
+    const e = ensure(s), g = b.dataset.g, id = b.dataset.id;
+    const i = e[g].indexOf(id); if(i>=0) e[g].splice(i,1); else e[g].push(id);
+    tidy(s); save(); render(); return;
+  }
+  if(a==='export'){ exportData(); return; }
+  if(a==='import'){ document.getElementById('importFile').click(); return; }
+  if(a==='print'){ window.print(); return; }
+});
+
+let tt;
+function toast(msg){
+  const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(tt); tt = setTimeout(()=>el.classList.remove('show'), 1200);
+}
+
+// Keep "today" correct if the page stays open past midnight
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) render(); });
+render();
+</script>
+</body>
+</html>
